@@ -1,5 +1,5 @@
-import org.scalatest.{ Matchers, WordSpec }
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatest.{ Matchers, WordSpec }
 
 class SeqUtilSpec extends WordSpec with Matchers with GeneratorDrivenPropertyChecks {
 

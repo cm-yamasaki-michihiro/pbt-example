@@ -1,10 +1,10 @@
-import org.scalatest.mockito.MockitoSugar
-import org.scalatest.{ BeforeAndAfter, Matchers, WordSpec }
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalacheck.Arbitrary.{ arbitrary, _ }
-import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
+import org.scalacheck.Arbitrary.{ arbitrary, _ }
 import org.scalacheck.{ Arbitrary, Gen }
+import org.scalatest.mockito.MockitoSugar
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatest.{ Matchers, WordSpec }
 
 import scala.util.{ Failure, Success }
 
