@@ -1,7 +1,7 @@
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.scalacheck.Arbitrary.{ arbitrary, _ }
-import org.scalacheck.{ Arbitrary, Gen }
+import org.scalacheck.{ Arbitrary, Gen, Shrink }
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{ Matchers, WordSpec }
@@ -95,8 +95,11 @@ class PostServiceSpec extends WordSpec
         forAll(paramGen) {
           case (post: Post, forbiddenWords: Seq[ForbiddenWord]) =>
             when(forbiddenWordsLoaderMock.load()).thenReturn(Success(forbiddenWords))
-            postService.doPost(post)
-            verify(postDaoMock).create(post)
+            when(postDaoMock.create(any[Post])).thenReturn(Success(()))
+            val result = postService.doPost(post)
+
+            verify(postDaoMock, times(1)).create(post)
+            result shouldBe Success(())
         }
       }
 
@@ -111,8 +114,11 @@ class PostServiceSpec extends WordSpec
         forAll(paramGen) {
           case (post: Post, forbiddenWords: Seq[ForbiddenWord]) =>
             when(forbiddenWordsLoaderMock.load()).thenReturn(Success(forbiddenWords))
-            postService.doPost(post)
+
+            val result = postService.doPost(post)
+
             verify(postDaoMock, never()).create(post)
+            result shouldBe Failure(ForbiddenWordIsContainedException())
         }
       }
     }

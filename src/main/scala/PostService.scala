@@ -6,15 +6,16 @@ case class Post(userId: Long, comment: String) {
 
 case class ForbiddenWord(word: String)
 
-class ForbiddenWordIsContainedException(comment: String, forbiddenWord: ForbiddenWord) extends RuntimeException
+case class ForbiddenWordIsContainedException() extends RuntimeException
 
 class PostService(postDAO: PostDAO, forbiddenWordsLoader: ForbiddenWordsLoader) {
   def doPost(post: Post): Try[Unit] = for {
     forbiddenWords <- forbiddenWordsLoader.load()
 
-    _ <- forbiddenWords.find(post.contains) match {
-      case None => postDAO.create(post)
-      case Some(forbiddenWord) => Failure(new ForbiddenWordIsContainedException(post.comment, forbiddenWord))
+    _ <- if (forbiddenWords.exists(post.contains)) {
+      Failure(ForbiddenWordIsContainedException())
+    } else {
+      postDAO.create(post)
     }
   } yield ()
 }
