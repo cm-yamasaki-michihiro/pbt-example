@@ -40,11 +40,9 @@ class PostServiceSpec extends WordSpec
     } yield ForbiddenWord(post.comment.substring(start, end))
 
   // PostにマッチするForbiddenWordを含んだリストを作成する
-  def forbiddenWordsGenMatches(post: Post): Gen[List[ForbiddenWord]] =
+  def forbiddenWordsMatchesGen(post: Post): Gen[List[ForbiddenWord]] =
     for {
-      start <- Gen.choose(0, post.comment.length)
-      end <- Gen.choose(start, post.comment.length)
-      matches = ForbiddenWord(post.comment.substring(start, end))
+      matches <- forbiddenWordMatchesGen(post)
 
       prefix <- Gen.listOf(arbitrary[ForbiddenWord])
       postfix <- Gen.listOf(arbitrary[ForbiddenWord])
@@ -108,7 +106,7 @@ class PostServiceSpec extends WordSpec
         //(Post, PostにマッチするForbiddenWordを含むList[ForbiddenWord])を生成
         val paramGen = for {
           post <- arbitrary[Post]
-          forbiddenWords <- forbiddenWordsGenMatches(post)
+          forbiddenWords <- forbiddenWordsMatchesGen(post)
         } yield (post, forbiddenWords)
 
         forAll(paramGen) {
