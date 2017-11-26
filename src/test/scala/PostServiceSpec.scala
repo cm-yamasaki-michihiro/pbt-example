@@ -32,33 +32,40 @@ class PostServiceSpec extends WordSpec
     arbitrary[String].map(ForbiddenWord)
   }
 
+  /*実は下のようにも書けます
+  implicit val arbPost: Arbitrary[Post] = Arbitrary(Gen.resultOf(Post))
+  implicit val arbForbiddenWord: Arbitrary[ForbiddenWord] = Arbitrary(Gen.resultOf(ForbiddenWord))
+  */
+
   // PostにマッチするForbiddenWordを生成する
-  def forbiddenWordMatchesGen(post: Post): Gen[ForbiddenWord] =
-    for {
+  def postAndForbiddenWordMatchesGen: Gen[(Post, ForbiddenWord)] =
+    (for {
+      post <- arbitrary[Post]
       start <- Gen.choose(0, post.comment.length)
       end <- Gen.choose(start, post.comment.length)
-    } yield ForbiddenWord(post.comment.substring(start, end))
+    } yield (post, ForbiddenWord(post.comment.substring(start, end))))
+      .suchThat { case (post, word) => post.contains(word) }
 
   // PostにマッチするForbiddenWordを含んだリストを作成する
-  def forbiddenWordsMatchesGen(post: Post): Gen[List[ForbiddenWord]] =
-    for {
-      matches <- forbiddenWordMatchesGen(post)
+  def forbiddenWordsMatchesGen: Gen[(Post, List[ForbiddenWord])] =
+    (for {
+      (post, matches) <- postAndForbiddenWordMatchesGen
 
       prefix <- Gen.listOf(arbitrary[ForbiddenWord])
       postfix <- Gen.listOf(arbitrary[ForbiddenWord])
-    } yield {
-      prefix ++ List(matches) ++ postfix
-    }
+    } yield (post, prefix ++ List(matches) ++ postfix))
+        .suchThat{ case (post, words) => words.exists(post.contains)}
 
   // PostにマッチしないForbiddenWordを生成する
-  def forbiddenWordNotMatchesGen(post: Post): Gen[ForbiddenWord] =
-    arbitrary[ForbiddenWord].filter{forbiddenWord =>
-      !post.contains(forbiddenWord)
-    }
+  def forbiddenWordNotMatchesGen: Gen[(Post, ForbiddenWord)] =
+    arbitrary[(Post, ForbiddenWord)]
+      .suchThat{case (post, forbiddenWord) => !post.contains(forbiddenWord)}
+
 
   // PostにマッチしないForbiddenWordのリストを生成する
-  def forbiddenWordsNotMatchesGen(post: Post): Gen[List[ForbiddenWord]] =
-    Gen.listOf(forbiddenWordNotMatchesGen(post))
+  def forbiddenWordsNotMatchesGen: Gen[(Post, List[ForbiddenWord])] =
+    arbitrary[(Post, List[ForbiddenWord])]
+        .suchThat{case (post, forbiddenWords) => forbiddenWords.forall(word => !post.contains(word))}
 
   "post()" when {
     "Loaderでの処理が失敗した時" should {
@@ -83,17 +90,12 @@ class PostServiceSpec extends WordSpec
     "依存コンポーネントが正常に処理を終了する時" should {
 
       "禁止ワードが含まれないポストは正常に投稿される" in new Context {
-        //(Post, PostにマッチするForbiddenWordを含まないList[ForbiddenWord])を生成
 
-        val paramGen = for {
-          post <- arbitrary[Post]
-          forbiddenWords <- forbiddenWordsNotMatchesGen(post)
-        } yield (post, forbiddenWords)
-
-        forAll(paramGen) {
+        forAll(forbiddenWordsNotMatchesGen) {
           case (post: Post, forbiddenWords: Seq[ForbiddenWord]) =>
             when(forbiddenWordsLoaderMock.load()).thenReturn(Success(forbiddenWords))
             when(postDaoMock.create(any[Post])).thenReturn(Success(()))
+
             val result = postService.doPost(post)
 
             verify(postDaoMock, times(1)).create(post)
@@ -103,13 +105,7 @@ class PostServiceSpec extends WordSpec
 
       "禁止ワードが含まれたポストは投稿されない" in new Context {
 
-        //(Post, PostにマッチするForbiddenWordを含むList[ForbiddenWord])を生成
-        val paramGen = for {
-          post <- arbitrary[Post]
-          forbiddenWords <- forbiddenWordsMatchesGen(post)
-        } yield (post, forbiddenWords)
-
-        forAll(paramGen) {
+        forAll(forbiddenWordsMatchesGen) {
           case (post: Post, forbiddenWords: Seq[ForbiddenWord]) =>
             when(forbiddenWordsLoaderMock.load()).thenReturn(Success(forbiddenWords))
 
