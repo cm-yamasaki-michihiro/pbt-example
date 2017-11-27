@@ -32,12 +32,12 @@ class PostServiceSpec extends WordSpec
     arbitrary[String].map(ForbiddenWord)
   }
 
-  /*実は下のようにも書けます
+  /*下のようにも書けます
   implicit val arbPost: Arbitrary[Post] = Arbitrary(Gen.resultOf(Post))
   implicit val arbForbiddenWord: Arbitrary[ForbiddenWord] = Arbitrary(Gen.resultOf(ForbiddenWord))
   */
 
-  // PostにマッチするForbiddenWordを生成する
+  // (Post, PostにマッチするForbiddenWord)を生成する
   def postAndForbiddenWordMatchesGen: Gen[(Post, ForbiddenWord)] =
     (for {
       post <- arbitrary[Post]
@@ -46,7 +46,7 @@ class PostServiceSpec extends WordSpec
     } yield (post, ForbiddenWord(post.comment.substring(start, end))))
       .suchThat { case (post, word) => post.contains(word) }
 
-  // PostにマッチするForbiddenWordを含んだリストを作成する
+  // （Post, PostにマッチするForbiddenWordを含んだリスト)を生成する
   def forbiddenWordsMatchesGen: Gen[(Post, List[ForbiddenWord])] =
     (for {
       (post, matches) <- postAndForbiddenWordMatchesGen
@@ -56,13 +56,13 @@ class PostServiceSpec extends WordSpec
     } yield (post, prefix ++ List(matches) ++ postfix))
         .suchThat{ case (post, words) => words.exists(post.contains)}
 
-  // PostにマッチしないForbiddenWordを生成する
+  // (Post, PostにマッチしないForbiddenWord)を生成する
   def forbiddenWordNotMatchesGen: Gen[(Post, ForbiddenWord)] =
     arbitrary[(Post, ForbiddenWord)]
       .suchThat{case (post, forbiddenWord) => !post.contains(forbiddenWord)}
 
 
-  // PostにマッチしないForbiddenWordのリストを生成する
+  // (Post, PostにマッチしないForbiddenWordのリスト)を生成する
   def forbiddenWordsNotMatchesGen: Gen[(Post, List[ForbiddenWord])] =
     arbitrary[(Post, List[ForbiddenWord])]
         .suchThat{case (post, forbiddenWords) => forbiddenWords.forall(word => !post.contains(word))}
