@@ -37,42 +37,45 @@ class PostServiceSpec extends WordSpec
   implicit val arbForbiddenWord: Arbitrary[ForbiddenWord] = Arbitrary(Gen.resultOf(ForbiddenWord))
   */
 
-  // (Post, PostにマッチするForbiddenWord)を生成する
-  def postAndForbiddenWordMatchesGen: Gen[(Post, ForbiddenWord)] =
+
+  // PostにマッチするForbiddenWordを生成する
+  def postAndForbiddenWordMatchesGen(post: Post): Gen[ForbiddenWord] =
     (for {
       post <- arbitrary[Post]
       start <- Gen.choose(0, post.comment.length)
       end <- Gen.choose(start, post.comment.length)
-    } yield (post, ForbiddenWord(post.comment.substring(start, end))))
-      .suchThat { case (post, word) => post.contains(word) }
+    } yield ForbiddenWord(post.comment.substring(start, end)))
+      .suchThat { word => post.contains(word) }
 
-  // （Post, PostにマッチするForbiddenWordを含んだリスト)を生成する
-  def forbiddenWordsMatchesGen: Gen[(Post, List[ForbiddenWord])] =
+  // PostにマッチするForbiddenWordを含んだリストを生成する
+  def forbiddenWordListMatchesGen(post: Post): Gen[List[ForbiddenWord]] =
     (for {
-      (post, matches) <- postAndForbiddenWordMatchesGen
+      matches <- postAndForbiddenWordMatchesGen(post)
 
       prefix <- Gen.listOf(arbitrary[ForbiddenWord])
       postfix <- Gen.listOf(arbitrary[ForbiddenWord])
-    } yield (post, prefix ++ List(matches) ++ postfix))
-        .suchThat{ case (post, words) => words.exists(post.contains)}
+    } yield prefix ++ List(matches) ++ postfix)
+      .suchThat { words => words.exists(post.contains) }
 
-  // (Post, PostにマッチしないForbiddenWord)を生成する
-  def forbiddenWordNotMatchesGen: Gen[(Post, ForbiddenWord)] =
-    arbitrary[(Post, ForbiddenWord)]
-      .suchThat{case (post, forbiddenWord) => !post.contains(forbiddenWord)}
+  // PostにマッチしないForbiddenWordを生成する
+  def forbiddenWordNotMatchesGen(post: Post): Gen[ForbiddenWord] =
+    arbitrary[ForbiddenWord]
+      .suchThat { forbiddenWord => !post.contains(forbiddenWord) }
 
 
-  // (Post, PostにマッチしないForbiddenWordのリスト)を生成する
-  def forbiddenWordsNotMatchesGen: Gen[(Post, List[ForbiddenWord])] =
-    arbitrary[(Post, List[ForbiddenWord])]
-        .suchThat{case (post, forbiddenWords) => forbiddenWords.forall(word => !post.contains(word))}
+  // PostにマッチしないForbiddenWordのリストを生成する
+  def forbiddenWordListNotMatchesGen(post: Post): Gen[List[ForbiddenWord]] =
+    Gen.listOf(forbiddenWordNotMatchesGen(post))
 
   "post()" when {
     "Loaderでの処理が失敗した時" should {
       "例外をLeftに包んで返す" in new Context {
         forAll { (post: Post, exception: Exception) =>
           when(forbiddenWordsLoaderMock.load()).thenReturn(Failure(exception))
-          postService.doPost(post) shouldBe Failure(exception)
+
+          val result = postService.doPost(post)
+
+          result shouldBe Failure(exception)
         }
       }
     }
@@ -81,20 +84,23 @@ class PostServiceSpec extends WordSpec
       "例外をLeftに包んで返す" in new Context {
         forAll { (post: Post, exception: Exception) =>
           when(forbiddenWordsLoaderMock.load()).thenReturn(Success(Seq.empty))
-          when(postDaoMock.create(any[Post]())).thenReturn(Failure(exception))
-          postService.doPost(post) shouldBe Failure(exception)
+          when(postDaoMock.create(post)).thenReturn(Failure(exception))
+
+          val result = postService.doPost(post)
+
+          result shouldBe Failure(exception)
         }
       }
     }
 
-    "依存コンポーネントが正常に処理を終了する時" should {
 
-      "禁止ワードが含まれないポストは正常に投稿される" in new Context {
+    "禁止ワードが含まれないポストは正常に投稿される" in new Context {
+      forAll {(post: Post) =>
+        forAll(forbiddenWordListNotMatchesGen(post), minSuccessful(1)) {
+          forbiddenWords: Seq[ForbiddenWord] =>
 
-        forAll(forbiddenWordsNotMatchesGen) {
-          case (post: Post, forbiddenWords: Seq[ForbiddenWord]) =>
             when(forbiddenWordsLoaderMock.load()).thenReturn(Success(forbiddenWords))
-            when(postDaoMock.create(any[Post])).thenReturn(Success(()))
+            when(postDaoMock.create(post)).thenReturn(Success(()))
 
             val result = postService.doPost(post)
 
@@ -102,11 +108,13 @@ class PostServiceSpec extends WordSpec
             result shouldBe Success(())
         }
       }
+    }
 
-      "禁止ワードが含まれたポストは投稿されない" in new Context {
+    "禁止ワードが含まれたポストは投稿されない" in new Context {
+      forAll { (post: Post) =>
+        forAll(forbiddenWordListMatchesGen(post), minSuccessful(1)) {
+          forbiddenWords: Seq[ForbiddenWord] =>
 
-        forAll(forbiddenWordsMatchesGen) {
-          case (post: Post, forbiddenWords: Seq[ForbiddenWord]) =>
             when(forbiddenWordsLoaderMock.load()).thenReturn(Success(forbiddenWords))
 
             val result = postService.doPost(post)
